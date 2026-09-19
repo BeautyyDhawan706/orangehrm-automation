@@ -1,0 +1,23 @@
+{
+  "name": "orangehrm-automation",
+  "version": "1.0.0",
+  "description": "Senior QA Automation Engineer technical test - OrangeHRM employee lifecycle automation",
+  "scripts": {
+    "test": "playwright test",
+    "test:e2e": "playwright test tests/e2e --project=e2e",
+    "test:api": "playwright test tests/api --project=api",
+    "test:qa": "cross-env ENV=qa playwright test",
+    "test:staging": "cross-env ENV=staging playwright test",
+    "test:parallel": "playwright test --workers=4",
+    "report": "playwright show-report playwright-report",
+    "perf:login": "k6 run k6/login-load-test.js",
+    "perf:employee-create": "k6 run k6/employee-creation-load-test.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@types/node": "^20.14.0",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.5.0"
+  }
+}
