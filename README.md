@@ -1,5 +1,7 @@
 # OrangeHRM Employee Lifecycle Automation
 
+[![CI](https://github.com/BeautyyDhawan706/orangehrm-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/BeautyyDhawan706/orangehrm-automation/actions/workflows/ci.yml)
+
 Automation framework for the Senior QA Automation Engineer technical test.
 Automates the full employee lifecycle (auth → create → validate → update →
 API-verify → delete) against the [OrangeHRM demo](https://opensource-demo.orangehrmlive.com)
@@ -159,6 +161,24 @@ npx playwright test --grep-invert @api   # UI-only run
 - **K6 HTML + JSON summaries** (`k6-reports/`) — threshold pass/fail plus
   latency percentiles for the two load-tested endpoints.
 
+## Where to find test reports & build artifacts
+
+These aren't committed to the repo (generated HTML/binary reports don't
+belong in git history) — they're produced by CI and downloadable from
+**[Actions → any run](https://github.com/BeautyyDhawan706/orangehrm-automation/actions/workflows/ci.yml)**,
+under that run's "Artifacts" section:
+
+| Artifact                     | What it is                                            |
+|-------------------------------|--------------------------------------------------------|
+| `playwright-report-final`     | The merged HTML report across all 4 shards             |
+| `junit-results-<shard>`       | Per-shard JUnit XML                                     |
+| `blob-report-<shard>`         | Raw per-shard Playwright report data (merge input)      |
+| `failure-artifacts-<shard>`   | Screenshots/videos/traces, only present if a test failed |
+| `k6-reports`                  | k6 HTML + JSON summaries (manual-dispatch runs only)    |
+
+A verified all-green run, including the k6 job, is here:
+https://github.com/BeautyyDhawan706/orangehrm-automation/actions/runs/35422564340
+
 ## CI/CD pipeline
 
 `.github/workflows/ci.yml` runs on every push/PR to `main`, plus manual
@@ -213,6 +233,11 @@ live execution rather than code review:
   rejects `nameOrId=` (empty string) as an invalid parameter instead of
   treating it as "no filter" — `ApiClient.getEmployeeById()` now omits the
   param entirely when unset.
+- **`/auth/logout` aborts under Playwright.** A direct `page.goto()` to the
+  logout URL gets `net::ERR_ABORTED` because the SPA's router intercepts it
+  client-side, which looks to Playwright like the navigation being
+  cancelled. `LoginPage.logout()` now drives the actual user-menu dropdown
+  instead of hitting the URL directly.
 
 None of this changes the architecture, POM boundaries, or CI wiring — it's
 exactly the class of bug that live-running a suite against a real target is

@@ -3,6 +3,7 @@ import { LoginPage } from '@pages/LoginPage';
 import { PimListPage } from '@pages/PimListPage';
 import { AddEmployeePage } from '@pages/AddEmployeePage';
 import { EmployeePersonalDetailsPage } from '@pages/EmployeePersonalDetailsPage';
+import { DashboardPage } from '@pages/DashboardPage';
 import { buildEmployee, updatedFields } from '@utils/testData';
 import { ApiClient } from '@utils/apiClient';
 import { config } from '@config/env';
@@ -37,7 +38,33 @@ test.describe('Employee lifecycle @regression', () => {
       expect(toast.toLowerCase()).toContain('success');
     });
 
-    // 3. Role-based / required-field validation, on a second record
+    // 3. Role-based validation — the login created above only carries ESS
+    // (employee self-service) access, not Admin's; confirm the restriction
+    // actually holds by logging in as that account and checking Admin-only
+    // navigation is unavailable to it.
+    await test.step('Role-based access is enforced for the created ESS account', async () => {
+      const login = new LoginPage(page);
+      await login.logout();
+      await login.login(employee.loginUsername, employee.loginPassword);
+      // ESS accounts land on their own "My Info" page rather than the
+      // Admin-style dashboard, so just confirm login actually succeeded.
+      await expect(page).not.toHaveURL(/auth\/login/);
+
+      const dashboard = new DashboardPage(page);
+      const visibleMenus = await dashboard.getVisibleMenuLabels();
+      expect(visibleMenus).not.toContain('Admin');
+      expect(visibleMenus).not.toContain('PIM');
+
+      // Back to Admin for the rest of the lifecycle (update/verify/delete
+      // the record this ESS account can't manage itself). The app can land
+      // a re-login on whatever page was open before, not always /dashboard,
+      // so just confirm login succeeded.
+      await login.logout();
+      await login.loginAsAdmin();
+      await expect(page).not.toHaveURL(/auth\/login/);
+    });
+
+    // 4. Required-field validation, on a second record
     await test.step('Required-field validation is enforced', async () => {
       const pimList = new PimListPage(page);
       await pimList.goto();
@@ -53,7 +80,7 @@ test.describe('Employee lifecycle @regression', () => {
       await pimList.goto();
     });
 
-    // 4. Employee update
+    // 5. Employee update
     await test.step('Update the created employee', async () => {
       const pimList = new PimListPage(page);
       await pimList.goto();
@@ -69,7 +96,7 @@ test.describe('Employee lifecycle @regression', () => {
       await expect(details.middleNameInput).toHaveValue(middleName);
     });
 
-    // 5. API-level verification — confirm the UI-created record exists via the underlying API
+    // 6. API-level verification — confirm the UI-created record exists via the underlying API
     await test.step('Verify the employee exists via API', async () => {
       const api = await ApiClient.create();
       await api.login(config.adminUsername, config.adminPassword);
@@ -79,7 +106,7 @@ test.describe('Employee lifecycle @regression', () => {
       await api.dispose();
     });
 
-    // 6. Employee deletion
+    // 7. Employee deletion
     await test.step('Delete the employee', async () => {
       const pimList = new PimListPage(page);
       await pimList.goto();

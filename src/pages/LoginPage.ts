@@ -31,4 +31,15 @@ export class LoginPage extends BasePage {
   async loginAsAdmin(): Promise<void> {
     await this.login(config.adminUsername, config.adminPassword);
   }
+
+  async logout(): Promise<void> {
+    // A direct page.goto('/auth/logout') gets aborted: the SPA's router
+    // intercepts the navigation client-side, which Playwright sees as the
+    // original request being cancelled. Going through the actual UI avoids
+    // that entirely.
+    await this.page.locator('.oxd-userdropdown-tab').click();
+    await this.page.getByRole('menuitem', { name: 'Logout' }).click();
+    await this.page.waitForURL(/auth\/login/);
+    await this.waitForReady();
+  }
 }
