@@ -22,7 +22,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -34,7 +34,9 @@ jobs:
       - name: Run tests (shard ${{ matrix.shard }}/4)
         env:
           ENV: qa
-        run: npx playwright test --shard=${{ matrix.shard }}/4 --reporter=blob
+        # No --reporter override here: playwright.config.ts already switches
+        # to blob (for merging) + junit when CI=true, which GitHub Actions sets.
+        run: npx playwright test --shard=${{ matrix.shard }}/4
 
       - name: Upload blob report (for merging)
         if: always()
@@ -73,7 +75,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -112,6 +114,9 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
           sudo apt-get update
           sudo apt-get install -y k6
+
+      - name: Create k6 reports directory
+        run: mkdir -p k6-reports
 
       - name: Run login load test
         run: k6 run k6/login-load-test.js

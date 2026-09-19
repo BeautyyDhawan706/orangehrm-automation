@@ -7,8 +7,10 @@ node_modules/
 /all-blob-reports/
 /playwright/.cache/
 
-# K6
-/k6-reports/
+# K6 (directory itself is tracked via .gitkeep — k6's handleSummary() can't
+# create it, so it must already exist before `k6 run` writes into it)
+/k6-reports/*
+!/k6-reports/.gitkeep
 
 # Env files with real secrets (examples/committed defaults are fine)
 .env
@@ -16,3 +18,6 @@ node_modules/
 
 # OS / editor
 .DS_Store
+
+# Claude Code session state (not project source)
+.claude/

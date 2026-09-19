@@ -24,11 +24,16 @@ export default defineConfig({
   retries: process.env.CI ? config.retries : 1,
   workers: process.env.CI ? 4 : undefined,
 
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['junit', { outputFile: 'test-results/junit-results.xml' }],
-  ],
+  // In CI, 'blob' replaces 'html' so each shard's results can be merged into
+  // one report afterward (see .github/workflows/ci.yml) — a shard only has a
+  // slice of the suite, so its own HTML report isn't useful on its own.
+  reporter: process.env.CI
+    ? [['blob'], ['junit', { outputFile: 'test-results/junit-results.xml' }]]
+    : [
+        ['list'],
+        ['html', { outputFolder: 'playwright-report', open: 'never' }],
+        ['junit', { outputFile: 'test-results/junit-results.xml' }],
+      ],
 
   use: {
     baseURL: config.baseUrl,
