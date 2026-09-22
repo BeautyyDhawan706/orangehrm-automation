@@ -187,6 +187,20 @@ npx playwright test --grep-invert @api   # UI-only run
 - **K6 HTML + JSON summaries** (`k6-reports/`) — threshold pass/fail plus
   latency percentiles for the two load-tested endpoints.
 
+### Performance thresholds
+
+| Scenario          | Latency thresholds      | HTTP failure rate | Check pass rate |
+| ----------------- | ----------------------- | ----------------- | --------------- |
+| Login API         | p95 < 2.5s and p99 < 5s | < 1%              | > 99%           |
+| Employee creation | p95 < 2.5s              | < 2%              | > 98%           |
+
+The login limits allow moderate network variance on the shared public demo
+without accepting a sustained slowdown. A threshold breach intentionally
+fails the manually dispatched performance job; it should be investigated or
+rerun when the external demo is degraded, not treated as a functional-test
+failure. The assignment requires threshold definitions but does not prescribe
+specific numeric targets.
+
 ## Where to find test reports & build artifacts
 
 These aren't committed to the repo (generated HTML/binary reports don't
