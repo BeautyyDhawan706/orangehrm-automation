@@ -1,6 +1,7 @@
-import { Page, Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { BasePage } from './BasePage';
-import { EmployeeData } from '@utils/testData';
+import { employeeFormSelectors } from './locators';
+import type { EmployeeData } from '@utils/testData';
 import { waitForToast } from '@utils/waits';
 
 export class AddEmployeePage extends BasePage {
@@ -17,10 +18,10 @@ export class AddEmployeePage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    this.firstNameInput = page.locator('input[name="firstName"]');
-    this.middleNameInput = page.locator('input[name="middleName"]');
+    this.firstNameInput = page.locator(employeeFormSelectors.firstName);
+    this.middleNameInput = page.locator(employeeFormSelectors.middleName);
     this.lastNameInput = page.locator('input[name="lastName"]');
-    this.employeeIdInput = page.locator('.oxd-grid-item:has(label:text("Employee Id")) input');
+    this.employeeIdInput = page.locator(employeeFormSelectors.employeeId);
     this.createLoginToggle = page.locator('.oxd-switch-input');
     this.usernameInput = page.locator('input[autocomplete="off"]').first();
     this.passwordInput = page.locator('input[type="password"]').first();
@@ -47,8 +48,7 @@ export class AddEmployeePage extends BasePage {
   }
 
   async save(): Promise<string> {
-    await this.saveButton.click();
-    const toastText = await waitForToast(this.page);
+    const [toastText] = await Promise.all([waitForToast(this.page), this.saveButton.click()]);
     await this.waitForReady();
     return toastText;
   }

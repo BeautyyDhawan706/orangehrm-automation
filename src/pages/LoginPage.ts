@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { BasePage } from './BasePage';
 import { config } from '@config/env';
 
@@ -24,7 +24,24 @@ export class LoginPage extends BasePage {
   async login(username: string, password: string): Promise<void> {
     await this.usernameInput.fill(username);
     await this.passwordInput.fill(password);
-    await this.loginButton.click();
+
+    const [response] = await Promise.all([
+      this.page.waitForResponse(
+        (candidate) =>
+          candidate.request().method() === 'POST' && candidate.url().includes('/auth/validate'),
+        { timeout: config.defaultTimeoutMs }
+      ),
+      this.loginButton.click({ noWaitAfter: true }),
+    ]);
+
+    const redirectLocation = response.headers().location ?? '';
+    if (redirectLocation.includes('/auth/login')) {
+      await this.errorMessage.waitFor({ state: 'visible', timeout: config.defaultTimeoutMs });
+    } else {
+      await this.page.waitForURL((url) => !url.pathname.includes('/auth/login'), {
+        timeout: config.defaultTimeoutMs,
+      });
+    }
     await this.waitForReady();
   }
 

@@ -12,9 +12,10 @@ node_modules/
 /k6-reports/*
 !/k6-reports/.gitkeep
 
-# Env files with real secrets (examples/committed defaults are fine)
+# Local env files may contain credentials and must never be committed.
 .env
 .env.local
+.env.*.local
 
 # OS / editor
 .DS_Store

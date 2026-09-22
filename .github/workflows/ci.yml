@@ -8,8 +8,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  quality:
+    name: Typecheck, lint, and format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run quality checks
+        run: npm run quality
+
   test:
     name: Test (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: [quality]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -34,6 +54,8 @@ jobs:
       - name: Run tests (shard ${{ matrix.shard }}/4)
         env:
           ENV: qa
+          ADMIN_USERNAME: ${{ secrets.ORANGEHRM_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ORANGEHRM_PASSWORD }}
         # No --reporter override here: playwright.config.ts already switches
         # to blob (for merging) + junit when CI=true, which GitHub Actions sets.
         run: npx playwright test --shard=${{ matrix.shard }}/4
@@ -119,9 +141,15 @@ jobs:
         run: mkdir -p k6-reports
 
       - name: Run login load test
+        env:
+          ADMIN_USERNAME: ${{ secrets.ORANGEHRM_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ORANGEHRM_PASSWORD }}
         run: k6 run k6/login-load-test.js
 
       - name: Run employee creation load test
+        env:
+          ADMIN_USERNAME: ${{ secrets.ORANGEHRM_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ORANGEHRM_PASSWORD }}
         run: k6 run k6/employee-creation-load-test.js
 
       - name: Upload k6 reports

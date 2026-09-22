@@ -9,15 +9,28 @@
     "test:qa": "cross-env ENV=qa playwright test",
     "test:staging": "cross-env ENV=staging playwright test",
     "test:parallel": "playwright test --workers=4",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "quality": "npm run typecheck && npm run lint && npm run format:check",
     "report": "playwright show-report playwright-report",
     "perf:login": "k6 run k6/login-load-test.js",
     "perf:employee-create": "k6 run k6/employee-creation-load-test.js"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.47.0",
     "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.1",
+    "@typescript-eslint/parser": "^8.70.1",
     "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.8",
     "typescript": "^5.5.0"
   }
 }

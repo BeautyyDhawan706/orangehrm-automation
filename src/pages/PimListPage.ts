@@ -1,5 +1,6 @@
-import { Page, Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { employeeFormSelectors } from './locators';
 import { config } from '@config/env';
 import { waitForToast } from '@utils/waits';
 
@@ -15,7 +16,7 @@ export class PimListPage extends BasePage {
     super(page);
     this.addButton = page.getByRole('button', { name: /add/i });
     this.employeeNameSearch = page.locator('.oxd-autocomplete-wrapper input').first();
-    this.employeeIdSearch = page.locator('.oxd-grid-item:has(label:text("Employee Id")) input');
+    this.employeeIdSearch = page.locator(employeeFormSelectors.employeeId);
     this.searchButton = page.getByRole('button', { name: /search/i });
     this.resultRows = page.locator('.oxd-table-card');
     this.recordsFoundText = page.locator('.orangehrm-horizontal-padding span').first();
@@ -27,7 +28,10 @@ export class PimListPage extends BasePage {
   }
 
   async openAddEmployee(): Promise<void> {
-    await this.addButton.click();
+    await Promise.all([
+      this.page.waitForURL(/pim\/addEmployee/),
+      this.addButton.click({ noWaitAfter: true }),
+    ]);
     await this.waitForReady();
   }
 
@@ -83,9 +87,16 @@ export class PimListPage extends BasePage {
   }
 
   async deleteFirstResult(): Promise<string> {
-    await this.resultRows.first().locator('button:has(i.bi-trash), .oxd-icon-button').last().click();
+    await this.resultRows
+      .first()
+      .locator('button:has(i.bi-trash), .oxd-icon-button')
+      .last()
+      .click();
     // Confirm deletion in the modal dialog.
-    await this.page.getByRole('button', { name: /yes, delete/i }).click();
-    return waitForToast(this.page);
+    const [toastText] = await Promise.all([
+      waitForToast(this.page),
+      this.page.getByRole('button', { name: /yes, delete/i }).click(),
+    ]);
+    return toastText;
   }
 }

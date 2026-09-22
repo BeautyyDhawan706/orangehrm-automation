@@ -9,14 +9,14 @@ instance, with CI/CD, flaky-test resilience, K6 performance tests, and reporting
 
 ## Stack
 
-| Concern         | Choice                                  |
-|-----------------|------------------------------------------|
-| Test runner     | Playwright Test + TypeScript             |
-| Pattern         | Page Object Model (POM)                  |
-| API checks      | Playwright `APIRequestContext`           |
-| CI/CD           | GitHub Actions (sharded, parallel)       |
-| Performance     | k6                                       |
-| Reporting       | Playwright HTML + JUnit, k6 HTML         |
+| Concern     | Choice                             |
+| ----------- | ---------------------------------- |
+| Test runner | Playwright Test + TypeScript       |
+| Pattern     | Page Object Model (POM)            |
+| API checks  | Playwright `APIRequestContext`     |
+| CI/CD       | GitHub Actions (sharded, parallel) |
+| Performance | k6                                 |
+| Reporting   | Playwright HTML + JUnit, k6 HTML   |
 
 Playwright was chosen over Selenium/WebdriverIO for this test because retries,
 screenshot/video/trace capture on failure, parallel sharding, and HTML
@@ -30,10 +30,12 @@ on the actual test logic.
 src/
   config/env.ts              # environment-based configuration (.env.<env>)
   pages/                     # Page Object Model classes (one per screen)
-  utils/                     # waits, test data factory, API client
+  utils/                     # waits, test data, API client, logging
 tests/
-  e2e/                       # UI + full-lifecycle tests
+  fixtures/                  # authenticated setup + guaranteed data cleanup
+  e2e/                       # independent lifecycle-stage tests
   api/                       # standalone API-layer tests
+shared/                      # cross-runtime constants used by Node and k6
 k6/                          # performance test scripts
 .github/workflows/ci.yml     # CI pipeline
 playwright.config.ts         # retries, reporters, parallel projects
@@ -44,7 +46,9 @@ playwright.config.ts         # retries, reporters, parallel projects
 ```bash
 npm ci
 npx playwright install --with-deps chromium
-cp .env.example .env.qa   # already provided; edit if pointing at your own instance
+cp .env.example .env.qa.local
+# Fill ADMIN_USERNAME and ADMIN_PASSWORD in .env.qa.local.
+# This ignored file must remain local and must not be committed.
 ```
 
 ## Execution
@@ -52,6 +56,9 @@ cp .env.example .env.qa   # already provided; edit if pointing at your own insta
 ```bash
 # Full suite (default env = qa)
 npm test
+
+# Static quality gate used by CI
+npm run quality
 
 # Just the E2E lifecycle test
 npm run test:e2e
@@ -71,7 +78,7 @@ npm run test:parallel
 # View the last HTML report
 npm run report
 
-# K6 performance tests (requires k6 installed locally)
+# K6 performance tests (requires k6 and credential environment variables)
 npm run perf:login
 npm run perf:employee-create
 ```
@@ -88,13 +95,19 @@ live in the test files. This keeps failures readable — a failed `expect()`
 points at the test intent, not a buried helper — and keeps page objects
 reusable across both positive and negative-path tests.
 
-**Test data generated per run, not fixed fixtures.** `buildEmployee()`
-suffixes names/IDs with a timestamp + random number, so parallel workers and
-repeated CI runs never collide on "employee already exists" errors. This is
-also what makes safe parallelization possible without a shared test database
-or serialized execution.
+**Independent tests with fixture-owned data.** Each lifecycle stage is a
+separate test that can run by itself. `buildEmployee()` generates unique data,
+and `tests/fixtures/test.ts` API-seeds prerequisites where creation is not the
+behavior under test. Every employee ID is registered before the test action;
+fixture teardown then deletes it in a `finally` block, including after failed
+assertions. Cleanup is idempotent when the delete test already removed it.
 
-**API verification via the app's own session, not a separate mocked API.**
+**Credentials are injected, never defaulted.** Local credentials belong in an
+ignored `.env.<environment>.local` file. CI reads `ORANGEHRM_USERNAME` and
+`ORANGEHRM_PASSWORD` repository secrets. Missing credentials fail with a clear
+configuration error; application and k6 code contain no credential fallback.
+
+**API setup and verification use the app's own session, not a mocked API.**
 Because the demo app's internal API is session-cookie authenticated rather
 than token authenticated, `ApiClient` replays the same login flow the UI
 uses, then hits the underlying REST endpoint directly. This proves the
@@ -107,9 +120,20 @@ jobs, then a `merge-reports` job collects every shard's HTML report into one
 final artifact. This keeps CI wall-clock time roughly constant as the suite
 grows, rather than degrading linearly.
 
+**Quality checks are executable, not conventional only.** ESLint, strict
+TypeScript, and Prettier run together through `npm run quality`, and the CI
+test matrix does not start unless that job passes.
+
+**API failures are diagnostic and recoverable.** Failed calls raise a typed
+error containing the method, URL, status, and a bounded response excerpt.
+Structured logs record setup and cleanup without credentials. Requests retry
+at most three times for rate limits or server errors, and one expired session
+is re-authenticated before retrying; permanent client errors still fail fast.
+
 ## Flaky test detection & mitigation strategy
 
 **Detection.**
+
 - Playwright's `retries` setting (2 in CI) automatically re-runs a failing
   test; a test that fails once and passes on retry is flagged as flaky in
   the HTML/JUnit report rather than being reported as a hard failure or a
@@ -125,6 +149,7 @@ grows, rather than degrading linearly.
   thorough retry budget is acceptable.
 
 **Mitigation.**
+
 - Condition-based waits (`waitForSpinnerGone`, `waitForToast`) replace fixed
   `sleep()` calls, so tests wait for the actual state the app signals
   (spinner detached, toast visible) instead of an arbitrary duration that is
@@ -142,8 +167,9 @@ grows, rather than degrading linearly.
 
 ## Tagging strategy
 
-Tags are appended to test titles (`@smoke`, `@regression`, `@api`) and
-filtered with Playwright's built-in `--grep`/`--grep-invert`:
+Tags use Playwright's typed `tag` metadata (`@smoke`, `@regression`, `@api`)
+and are filtered with Playwright's built-in `--grep`/`--grep-invert`. A tag is
+therefore visible as test metadata rather than being an unchecked title suffix:
 
 ```bash
 npx playwright test --grep @smoke        # fast, must-pass-every-push subset
@@ -168,44 +194,42 @@ belong in git history) — they're produced by CI and downloadable from
 **[Actions → any run](https://github.com/BeautyyDhawan706/orangehrm-automation/actions/workflows/ci.yml)**,
 under that run's "Artifacts" section:
 
-| Artifact                     | What it is                                            |
-|-------------------------------|--------------------------------------------------------|
-| `playwright-report-final`     | The merged HTML report across all 4 shards             |
-| `junit-results-<shard>`       | Per-shard JUnit XML                                     |
-| `blob-report-<shard>`         | Raw per-shard Playwright report data (merge input)      |
-| `failure-artifacts-<shard>`   | Screenshots/videos/traces, only present if a test failed |
-| `k6-reports`                  | k6 HTML + JSON summaries (manual-dispatch runs only)    |
-
-A verified all-green run, including the k6 job, is here:
-https://github.com/BeautyyDhawan706/orangehrm-automation/actions/runs/35422564340
+| Artifact                    | What it is                                               |
+| --------------------------- | -------------------------------------------------------- |
+| `playwright-report-final`   | The merged HTML report across all 4 shards               |
+| `junit-results-<shard>`     | Per-shard JUnit XML                                      |
+| `blob-report-<shard>`       | Raw per-shard Playwright report data (merge input)       |
+| `failure-artifacts-<shard>` | Screenshots/videos/traces, only present if a test failed |
+| `k6-reports`                | k6 HTML + JSON summaries (manual-dispatch runs only)     |
 
 ## CI/CD pipeline
 
 `.github/workflows/ci.yml` runs on every push/PR to `main`, plus manual
 dispatch:
 
-1. Installs Node dependencies and Playwright browsers.
-2. Runs the suite across 4 parallel shards.
-3. Uploads each shard's HTML report and failure artifacts (screenshots,
+1. Runs strict TypeScript, ESLint, and Prettier checks.
+2. Installs Node dependencies and Playwright browsers.
+3. Injects credentials from GitHub repository secrets and runs the suite
+   across 4 parallel shards.
+4. Uploads each shard's HTML report and failure artifacts (screenshots,
    videos, traces) unconditionally (`if: always()`), so failed runs are
    still debuggable.
-4. Merges all shard reports into one `playwright-report-final` artifact.
-5. On manual dispatch, runs the K6 performance suite as a separate job.
+5. Merges all shard reports into one `playwright-report-final` artifact.
+6. On manual dispatch, runs the K6 performance suite as a separate job.
+
+Before enabling CI, create repository secrets named `ORANGEHRM_USERNAME` and
+`ORANGEHRM_PASSWORD`. Secret values are never stored in workflow YAML.
 
 ## Notes for the reviewer
 
-The full suite (E2E lifecycle + API tests) has been run and verified green
-against the live OrangeHRM demo, including sharded blob-report merging
-locally to validate the CI pipeline's report-merge step before trusting it
-in Actions. That pass surfaced several real bugs beyond selector drift,
-worth calling out since they're the kind of thing that only shows up under
-live execution rather than code review:
+Live execution against the shared OrangeHRM demo surfaced several bugs beyond
+selector drift, worth calling out since they are the kind of issue that only
+appears under real network and SPA timing conditions:
 
 - **Whole-test timeout misconfigured.** `playwright.config.ts` wired the
   per-action wait budget (`DEFAULT_TIMEOUT_MS`, 15s) into Playwright's
-  *whole-test* `timeout`, which is nowhere near enough for a 6-step
-  lifecycle test against a real remote instance. Decoupled into its own
-  60s budget.
+  _whole-test_ `timeout`. These budgets are now separate, and all condition
+  waits share the environment-driven action timeout.
 - **CSRF token extraction wrong.** The login page is client-rendered by
   Vue; the token isn't a form field in the raw HTML (`ApiClient.login()`
   and both k6 scripts were scraping for one) — it's a prop on the
@@ -215,8 +239,11 @@ live execution rather than code review:
   transition (e.g. Add Employee's Save, or editing a field right after
   opening a record) can land before the component has finished mounting or
   the async data fetch has resolved — in the latter case the fetch
-  resolving *after* your edit silently overwrites it. Fixed with explicit
+  resolving _after_ your edit silently overwrites it. Fixed with explicit
   readiness waits rather than fixed sleeps.
+- **Toast/navigation race.** A success toast can appear and disappear while a
+  click is still waiting for SPA navigation. Toast and click waits now start
+  together with `Promise.all`, so success evidence cannot be missed.
 - **Employee Name search silently no-ops on free text.** The autocomplete
   field only actually filters once a suggestion is selected; typing a name
   without selecting it falls through to an unfiltered list rather than
@@ -239,6 +266,6 @@ live execution rather than code review:
   cancelled. `LoginPage.logout()` now drives the actual user-menu dropdown
   instead of hitting the URL directly.
 
-None of this changes the architecture, POM boundaries, or CI wiring — it's
-exactly the class of bug that live-running a suite against a real target is
-supposed to catch before a reviewer does.
+The page-object boundary remains action-only: assertions stay in test files,
+while setup, teardown, API diagnostics, and shared synchronization live in
+their dedicated framework layers.

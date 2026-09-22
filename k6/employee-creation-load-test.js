@@ -1,10 +1,11 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js';
+import { authenticate, requiredEnvironmentVariable } from './utils/auth.js';
 
 const BASE_URL = __ENV.BASE_URL || 'https://opensource-demo.orangehrmlive.com';
-const USERNAME = __ENV.ADMIN_USERNAME || 'Admin';
-const PASSWORD = __ENV.ADMIN_PASSWORD || 'admin123';
+const USERNAME = requiredEnvironmentVariable('ADMIN_USERNAME');
+const PASSWORD = requiredEnvironmentVariable('ADMIN_PASSWORD');
 
 export const options = {
   scenarios: {
@@ -26,22 +27,8 @@ export const options = {
   },
 };
 
-function authenticate() {
-  // See login-load-test.js: the CSRF token is a Vue component prop, not a
-  // form field, and the form posts to /auth/validate, not /auth/login.
-  const loginPageRes = http.get(`${BASE_URL}/web/index.php/auth/login`);
-  const tokenMatch = loginPageRes.body.match(/:token="&quot;([^&]+)&quot;"/);
-  const csrfToken = tokenMatch ? tokenMatch[1] : '';
-
-  http.post(`${BASE_URL}/web/index.php/auth/validate`, {
-    username: USERNAME,
-    password: PASSWORD,
-    _token: csrfToken,
-  });
-}
-
 export default function () {
-  authenticate();
+  authenticate(BASE_URL, USERNAME, PASSWORD);
 
   const uniqueSuffix = `${Date.now()}${__VU}${__ITER}`;
   const payload = JSON.stringify({
@@ -56,8 +43,7 @@ export default function () {
   });
 
   check(res, {
-    'employee creation responded 2xx/success shape': (r) =>
-      r.status === 200 || r.status === 201,
+    'employee creation responded 2xx/success shape': (r) => r.status === 200 || r.status === 201,
   });
 
   sleep(1);

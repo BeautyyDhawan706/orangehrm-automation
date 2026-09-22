@@ -1,10 +1,10 @@
-import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js';
+import { authenticate, requiredEnvironmentVariable } from './utils/auth.js';
 
 const BASE_URL = __ENV.BASE_URL || 'https://opensource-demo.orangehrmlive.com';
-const USERNAME = __ENV.ADMIN_USERNAME || 'Admin';
-const PASSWORD = __ENV.ADMIN_PASSWORD || 'admin123';
+const USERNAME = requiredEnvironmentVariable('ADMIN_USERNAME');
+const PASSWORD = requiredEnvironmentVariable('ADMIN_PASSWORD');
 
 export const options = {
   scenarios: {
@@ -13,8 +13,8 @@ export const options = {
       startVUs: 0,
       stages: [
         { duration: '30s', target: 10 }, // ramp up
-        { duration: '1m', target: 10 },  // sustain
-        { duration: '20s', target: 0 },  // ramp down
+        { duration: '1m', target: 10 }, // sustain
+        { duration: '20s', target: 0 }, // ramp down
       ],
     },
   },
@@ -27,25 +27,11 @@ export const options = {
 };
 
 export default function () {
-  // 1. Load the login page to obtain the CSRF token. The login form is
-  // client-rendered by Vue, so the token isn't in a form field in the raw
-  // HTML — it's passed as a prop on the <auth-login> component:
-  // :token="&quot;<token>&quot;".
-  const loginPageRes = http.get(`${BASE_URL}/web/index.php/auth/login`);
-  check(loginPageRes, { 'login page loaded': (r) => r.status === 200 });
+  const { loginPageResponse, loginResponse } = authenticate(BASE_URL, USERNAME, PASSWORD);
+  check(loginPageResponse, { 'login page loaded': (response) => response.status === 200 });
 
-  const tokenMatch = loginPageRes.body.match(/:token="&quot;([^&]+)&quot;"/);
-  const csrfToken = tokenMatch ? tokenMatch[1] : '';
-
-  // 2. Submit credentials to the form's actual action endpoint.
-  const loginRes = http.post(`${BASE_URL}/web/index.php/auth/validate`, {
-    username: USERNAME,
-    password: PASSWORD,
-    _token: csrfToken,
-  });
-
-  check(loginRes, {
-    'login responded': (r) => r.status === 200 || r.status === 302,
+  check(loginResponse, {
+    'login responded': (response) => response.status === 200 || response.status === 302,
   });
 
   sleep(1);

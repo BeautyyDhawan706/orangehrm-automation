@@ -17,8 +17,8 @@ export default defineConfig({
   // Whole-test timeout: generous enough for a multi-step lifecycle test against
   // a live remote instance. DEFAULT_TIMEOUT_MS is a per-action wait budget
   // (see waits.ts), not the right scale for the overall test.
-  timeout: 60000,
-  expect: { timeout: 10000 },
+  timeout: 180000,
+  expect: { timeout: 15000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? config.retries : 1,
@@ -40,8 +40,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 10000,
-    navigationTimeout: 20000,
+    actionTimeout: config.defaultTimeoutMs,
+    navigationTimeout: config.defaultTimeoutMs,
   },
 
   projects: [
